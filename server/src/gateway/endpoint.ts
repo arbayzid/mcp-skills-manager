@@ -1,6 +1,28 @@
 import type { Skill, SkillToolMode } from '@mcp-skills/shared';
 import type { ConfigStore } from '../config/store.ts';
+import { SkillSearchIndex } from '../skills/search-index.ts';
 import type { SkillServerDeps } from './skill-server.ts';
+
+/** The search index of each store, shared by all its endpoints and by every request to them. */
+const SEARCH_INDEXES = new WeakMap<ConfigStore, SkillSearchIndex>();
+
+/**
+ * Finds the search index of a store, building it the first time.
+ *
+ * @param store - The config store.
+ * @returns One index over every skill of the store, whichever endpoint serves it.
+ */
+function searchIndexFor(store: ConfigStore): SkillSearchIndex {
+  let index = SEARCH_INDEXES.get(store);
+  if (index === undefined) {
+    index = new SkillSearchIndex({
+      getSkills: () => store.getSkills(),
+      readFile: (name, relPath) => store.readSupportingFile(name, relPath),
+    });
+    SEARCH_INDEXES.set(store, index);
+  }
+  return index;
+}
 
 /** Which skills an endpoint serves and whether its transport can push notifications. */
 export interface EndpointOptions {
@@ -52,6 +74,7 @@ export function endpointDeps(store: ConfigStore, options: EndpointOptions): Skil
     getSkillToolMode,
     readSupportingFile: (name, relPath) => store.readSupportingFile(name, relPath),
     onSkillLoaded: (name) => store.recordSkillUse(name),
+    searchIndex: searchIndexFor(store),
     // A stateless server omits this so it never advertises capabilities it can't honor.
     ...(liveUpdates ? { onSkillsChanged } : {}),
   };

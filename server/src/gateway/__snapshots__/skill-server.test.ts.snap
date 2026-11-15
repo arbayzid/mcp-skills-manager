@@ -12,12 +12,22 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "list_skills",
   },
   {
-    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, best match first, in the format of \`list_skills\` (metadata only, no bodies). The \`query\` is ranked (BM25) against each skill’s name, description, tags, body and text supporting files, so a skill need not contain every word. Under each hit, \`↳ path § heading\` lines say where it matched: \`body\` is the skill’s own text (load the skill to read it); any other path is a supporting file, readable with \`read_skill_file\` or as the resource \`skill://<name>/<path>\`. Pass \`skill\` to search inside one skill instead and get its matching sections with a snippet each. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name, or which of a skill’s files covers it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "limit": {
+          "description": "Most results to return when the query ranks them (default 10).",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer",
+        },
         "query": {
-          "description": "Free-text search; every whitespace-separated term must match.",
+          "description": "Free-text search, ranked; required with \`skill\`.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Search inside this one skill (its name from \`list_skills\`) and list its matching sections.",
           "type": "string",
         },
         "tags": {
@@ -378,12 +388,22 @@ exports[`skill-server advertised tools with authoring on > pins every tool defin
     "name": "list_skills",
   },
   {
-    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, best match first, in the format of \`list_skills\` (metadata only, no bodies). The \`query\` is ranked (BM25) against each skill’s name, description, tags, body and text supporting files, so a skill need not contain every word. Under each hit, \`↳ path § heading\` lines say where it matched: \`body\` is the skill’s own text (load the skill to read it); any other path is a supporting file, readable with \`read_skill_file\` or as the resource \`skill://<name>/<path>\`. Pass \`skill\` to search inside one skill instead and get its matching sections with a snippet each. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name, or which of a skill’s files covers it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "limit": {
+          "description": "Most results to return when the query ranks them (default 10).",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer",
+        },
         "query": {
-          "description": "Free-text search; every whitespace-separated term must match.",
+          "description": "Free-text search, ranked; required with \`skill\`.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Search inside this one skill (its name from \`list_skills\`) and list its matching sections.",
           "type": "string",
         },
         "tags": {
@@ -745,12 +765,22 @@ exports[`skill-server advertised tools with authoring on > pins the authoring to
     "name": "list_skills",
   },
   {
-    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of \`list_skills\` (metadata only, no bodies). Provide a free-text \`query\` (matched against each skill’s name, description, tags, and body) and/or a \`tags\` filter. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name; then load a match as usual.",
+    "description": "Search this endpoint’s skills by intent and return the matching catalogue lines, best match first, in the format of \`list_skills\` (metadata only, no bodies). The \`query\` is ranked (BM25) against each skill’s name, description, tags, body and text supporting files, so a skill need not contain every word. Under each hit, \`↳ path § heading\` lines say where it matched: \`body\` is the skill’s own text (load the skill to read it); any other path is a supporting file, readable with \`read_skill_file\` or as the resource \`skill://<name>/<path>\`. Pass \`skill\` to search inside one skill instead and get its matching sections with a snippet each. Use this instead of \`list_skills\` when you know roughly what you need but not the exact skill name, or which of a skill’s files covers it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "limit": {
+          "description": "Most results to return when the query ranks them (default 10).",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer",
+        },
         "query": {
-          "description": "Free-text search; every whitespace-separated term must match.",
+          "description": "Free-text search, ranked; required with \`skill\`.",
+          "type": "string",
+        },
+        "skill": {
+          "description": "Search inside this one skill (its name from \`list_skills\`) and list its matching sections.",
           "type": "string",
         },
         "tags": {

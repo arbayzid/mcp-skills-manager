@@ -18,7 +18,7 @@ export const INDEX_TOOL_NAME = 'list_skills';
 export const LOAD_TOOL_NAME = 'load_skill';
 
 /**
- * Name of the search meta-tool, which matches a query against each skill's name, description, tags and body.
+ * Name of the search meta-tool, which ranks skills against a query over their metadata, bodies and supporting files.
  *
  * @remarks
  * It answers with the same catalogue lines as `list_skills`, so an agent finds a skill without loading every body.
@@ -54,22 +54,42 @@ export function indexToolDefinition(mode: SkillToolMode): Tool {
   };
 }
 
+/** Most results `search_skills` returns when its query ranks them and the caller sets no `limit`. */
+export const DEFAULT_SEARCH_LIMIT = 10;
+
+/** Largest `limit` `search_skills` takes. */
+export const MAX_SEARCH_LIMIT = 50;
+
 /** Definition of the `search_skills` tool. */
 export const SEARCH_TOOL_DEFINITION: Tool = {
   name: SEARCH_TOOL_NAME,
   description:
-    'Search this endpoint’s skills by intent and return the matching catalogue lines, in the format of ' +
-    '`list_skills` (metadata only, no bodies). Provide a free-text `query` (matched against each skill’s ' +
-    'name, description, tags, and body) and/or a `tags` filter. Use this instead of `list_skills` when you ' +
-    'know roughly what you need but not the exact skill name; then load a match as usual.',
+    'Search this endpoint’s skills by intent and return the matching catalogue lines, best match first, in the ' +
+    'format of `list_skills` (metadata only, no bodies). The `query` is ranked (BM25) against each skill’s name, ' +
+    'description, tags, body and text supporting files, so a skill need not contain every word. Under each hit, ' +
+    '`↳ path § heading` lines say where it matched: `body` is the skill’s own text (load the skill to read it); ' +
+    'any other path is a supporting file, readable with `read_skill_file` or as the resource ' +
+    '`skill://<name>/<path>`. Pass `skill` to search inside one skill instead and get its matching sections with ' +
+    'a snippet each. Use this instead of `list_skills` when you know roughly what you need but not the exact ' +
+    'skill name, or which of a skill’s files covers it.',
   inputSchema: {
     type: 'object',
     properties: {
-      query: { type: 'string', description: 'Free-text search; every whitespace-separated term must match.' },
+      query: { type: 'string', description: 'Free-text search, ranked; required with `skill`.' },
       tags: {
         type: 'array',
         items: { type: 'string' },
         description: 'Only skills carrying at least one of these tags.',
+      },
+      skill: {
+        type: 'string',
+        description: 'Search inside this one skill (its name from `list_skills`) and list its matching sections.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: MAX_SEARCH_LIMIT,
+        description: `Most results to return when the query ranks them (default ${DEFAULT_SEARCH_LIMIT}).`,
       },
     },
     additionalProperties: false,

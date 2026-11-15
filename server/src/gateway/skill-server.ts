@@ -16,15 +16,18 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { errorMessage } from '../errors.ts';
+import { SkillSearchIndex } from '../skills/search-index.ts';
 import { bundledFiles, skillToolNames } from '../skills/skill-view.ts';
 import { SERVER_VERSION } from '../version.ts';
 import type { AuthoringDeps, AuthoringTool } from './authoring-tools.ts';
 import { buildAuthoringTools, issueSummary } from './authoring-tools.ts';
 import {
+  DEFAULT_SEARCH_LIMIT,
   INDEX_TOOL_NAME,
   indexToolDefinition,
   LOAD_TOOL_DEFINITION,
   LOAD_TOOL_NAME,
+  MAX_SEARCH_LIMIT,
   NO_ARGS_SCHEMA,
   SEARCH_TOOL_DEFINITION,
   SEARCH_TOOL_NAME,
@@ -43,8 +46,7 @@ import {
 } from './resource-uri.ts';
 import type { SkillPromptRef } from './skill-prompts.ts';
 import { fillPrompt, listPromptRefs, missingArguments, parsePrompt } from './skill-prompts.ts';
-import { renderIndex, renderSkill, skillTitle } from './skill-render.ts';
-import { searchSkills } from './skill-search.ts';
+import { renderIndex, renderPassages, renderSearchHits, renderSkill, skillTitle } from './skill-render.ts';
 
 /**
  * Builds the capabilities the server advertises.
@@ -137,6 +139,14 @@ export interface SkillServerDeps {
    * pushes notifications. Wire it only on a long-lived transport: the stateless HTTP path cannot push.
    */
   onSkillsChanged?: (listener: () => void) => () => void;
+  /**
+   * The index `search_skills` ranks with; left out, the server builds its own over `getSkills` and
+   * `readSupportingFile`.
+   *
+   * @remarks
+   * Pass one index shared by every endpoint of a store, so a stateless per-request server does not rebuild it.
+   */
+  searchIndex?: SkillSearchIndex;
 }
 
 /**
@@ -181,8 +191,13 @@ function findByName(skills: Skill[], name: string): Skill | undefined {
   return skills.find((s) => s.name === name);
 }
 
-/** What `search_skills` takes: both are optional, and neither given lists everything. */
-const searchArgsSchema = z.strictObject({ query: z.string().default(''), tags: z.array(z.string()).default([]) });
+/** What `search_skills` takes: all optional; neither a query nor tags lists everything, and `skill` needs a query. */
+const searchArgsSchema = z.strictObject({
+  query: z.string().default(''),
+  tags: z.array(z.string()).default([]),
+  skill: z.string().optional(),
+  limit: z.number().int().min(1).max(MAX_SEARCH_LIMIT).default(DEFAULT_SEARCH_LIMIT),
+});
 
 /** What `load_skill` takes. */
 const loadArgsSchema = z.strictObject({ name: z.string() });
@@ -217,6 +232,11 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
     const toolNames = skillToolNames(skills);
     return skills.find((skill) => toolNames.get(skill.name) === name);
   };
+
+  // A shared index when the endpoint hands one over (built once per store, so a stateless request does not
+  // re-read every file); otherwise this server's own, over what it serves.
+  const searchIndex =
+    deps.searchIndex ?? new SkillSearchIndex({ getSkills: deps.getSkills, readFile: deps.readSupportingFile });
 
   // Authoring tools are built once (closures over the store); which of them are actually served is
   // decided live per request, from `authoringEnabled` and `disabledAuthoringTools`.
@@ -281,9 +301,23 @@ function registerToolHandlers(server: Server, deps: SkillServerDeps): void {
       return textResult(renderIndex(skills, skillToolMode(), skillToolNames(skills)));
     }
     if (req.params.name === SEARCH_TOOL_NAME) {
-      const { query, tags } = parseToolArgs(SEARCH_TOOL_NAME, searchArgsSchema, req.params.arguments);
+      const args = parseToolArgs(SEARCH_TOOL_NAME, searchArgsSchema, req.params.arguments);
       const skills = deps.getSkills();
-      return textResult(renderIndex(searchSkills(skills, query, tags), skillToolMode(), skillToolNames(skills)));
+      if (args.skill !== undefined) {
+        const skill = findByName(skills, args.skill);
+        if (!skill) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            `Unknown skill "${args.skill}": call ${INDEX_TOOL_NAME} for the names served here`,
+          );
+        }
+        if (args.query.trim().length === 0) {
+          throw new McpError(ErrorCode.InvalidParams, `${SEARCH_TOOL_NAME} needs a \`query\` to search inside a skill`);
+        }
+        return textResult(renderPassages(skill.name, await searchIndex.searchPassages(skill, args.query, args.limit)));
+      }
+      const hits = await searchIndex.search(skills, args);
+      return textResult(renderSearchHits(hits, skillToolMode(), skillToolNames(skills)));
     }
     if (skillToolMode() === 'loader' && req.params.name === LOAD_TOOL_NAME) {
       const { name: wanted } = parseToolArgs(LOAD_TOOL_NAME, loadArgsSchema, req.params.arguments);

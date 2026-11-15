@@ -41,8 +41,16 @@ the same `ConfigStore` mutators as the REST API. They live in
 `shared/src/settings.ts`. `edit_skill` swaps exact passages of a skill's body, or
 of a supporting file given a `path` (`server/src/skills/replacements.ts`): all of
 its edits are written or none. `list_skills` and `search_skills` answer in text,
-one line per skill (`renderIndex` in `skill-render.ts`), not JSON. A skill authored **via a
-workspace endpoint** is scoped to that workspace by default: written with a
+one line per skill (`renderIndex` / `renderSearchHits` in `skill-render.ts`), not JSON.
+`search_skills` ranks with a MiniSearch BM25 index (`server/src/skills/search-index.ts`)
+over each skill's metadata plus every heading-split section (`sections.ts`) of its
+body and text supporting files. One index per store is shared by all endpoints
+(`searchIndexFor` in `endpoint.ts`) and each search narrows it to the served skills;
+it re-indexes any skill whose object the store replaced, so reloads keep it
+current. Hits list their best sections as `↳ path § heading`; `skill` + `query`
+searches inside one skill. A skill holding every query word verbatim (the old
+substring match) still ranks, after a bonus, so mid-word literals keep working.
+A skill authored **via a workspace endpoint** is scoped to that workspace by default: written with a
 `global: false` frontmatter key (which hides it from the root `/mcp` aggregate —
 see `ConfigStore.getGlobalSkills`) and appended to the workspace's member list.
 Root-authored skills are global. A workspace endpoint authors only the skills it

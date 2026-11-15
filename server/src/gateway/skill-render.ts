@@ -1,5 +1,7 @@
 import type { Skill, SkillToolMode } from '@mcp-skills/shared';
 import { normalizeTags } from '@mcp-skills/shared';
+import type { Passage, SkillHit } from '../skills/search-index.ts';
+import { BODY_PATH } from '../skills/search-index.ts';
 import { bundledFiles } from '../skills/skill-view.ts';
 import { fileResourceUri } from './resource-uri.ts';
 import { promptFileName } from './skill-prompts.ts';
@@ -128,4 +130,57 @@ export function renderIndex(skills: Skill[], mode: SkillToolMode, toolNames: Rea
     return 'No skills.';
   }
   return [`skills: ${skills.length}`, ...skills.map((skill) => indexLine(skill, mode, toolNames))].join('\n');
+}
+
+/**
+ * Names where a passage is: its file, or `body` for the skill's own text, and its heading when it has one.
+ *
+ * @param passage - The passage.
+ * @returns The location, as `path § heading`.
+ */
+function passageLocation(passage: Passage): string {
+  const file = passage.path === BODY_PATH ? 'body' : passage.path;
+  return passage.heading.length > 0 ? `${file} § ${passage.heading}` : file;
+}
+
+/**
+ * Renders what `search_skills` answers with: the catalogue lines of the hits, each followed by where it matched.
+ *
+ * @param hits - The hits, in the order to list them.
+ * @param mode - How the endpoint advertises skills; a per-skill tool name is only shown under `per-skill`.
+ * @param toolNames - Tool name by skill name, for every skill the endpoint serves.
+ * @returns The catalogue text, with an indented `↳ location` line per passage; `No skills.` for no hits.
+ */
+export function renderSearchHits(
+  hits: SkillHit[],
+  mode: SkillToolMode,
+  toolNames: ReadonlyMap<string, string>,
+): string {
+  if (hits.length === 0) {
+    return 'No skills.';
+  }
+  const lines = hits.flatMap((hit) => [
+    indexLine(hit.skill, mode, toolNames),
+    ...hit.passages.map((passage) => `  ↳ ${passageLocation(passage)}`),
+  ]);
+  return [`skills: ${hits.length}`, ...lines].join('\n');
+}
+
+/**
+ * Renders what `search_skills` answers with when it looks inside one skill: its matching sections, best first.
+ *
+ * @param skillName - The skill searched.
+ * @param passages - Its matching sections.
+ * @returns A line that counts them, then one per passage as `location: snippet` (just `location` for a heading with no
+ * text under it).
+ */
+export function renderPassages(skillName: string, passages: Passage[]): string {
+  if (passages.length === 0) {
+    return `No passages in ${skillName} match.`;
+  }
+  const lines = passages.map((passage) => {
+    const snippet = passage.snippet.length > 0 ? `: ${passage.snippet}` : '';
+    return `- ${passageLocation(passage)}${snippet}`;
+  });
+  return [`passages in ${skillName}: ${passages.length}`, ...lines].join('\n');
 }

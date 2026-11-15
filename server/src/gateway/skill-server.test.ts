@@ -160,11 +160,12 @@ describe('skill-server search tool', () => {
     skill({ name: 'grep-guide', description: 'Search code effectively.', body: '# grep-guide\n\nuse ripgrep' }),
   ];
 
-  /** The skill names of a catalogue: the first word of every line under the count. */
+  /** The skill names of a catalogue: the first word of every line under the count, `↳` passage lines skipped. */
   const names = (text: string): string[] =>
     text
       .split('\n')
       .slice(1)
+      .filter((line) => line.startsWith(' ') === false)
       .map((line) => line.split(' ')[0] ?? '');
 
   let client: Client;
@@ -187,16 +188,58 @@ describe('skill-server search tool', () => {
     );
   });
 
-  it('requires every whitespace-separated term to match (AND semantics)', async () => {
-    const hit = firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'pdf inspect' } }));
-    expect(names(hit)).toEqual(['pdf-forms']);
-    const miss = firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'pdf commit' } }));
-    expect(names(miss)).toEqual([]);
+  it('ranks rather than requiring every term, putting a skill that holds them all first', async () => {
+    const both = firstText(await client.callTool({ name: 'search_skills', arguments: { query: 'pdf commit' } }));
+    expect(names(both).sort()).toEqual(['commit.messages', 'pdf-forms']);
+    const ranked = firstText(
+      await client.callTool({ name: 'search_skills', arguments: { query: 'inspect pdf forms' } }),
+    );
+    expect(names(ranked)[0]).toBe('pdf-forms');
+  });
+
+  it('caps a ranked search at `limit`', async () => {
+    const text = firstText(
+      await client.callTool({ name: 'search_skills', arguments: { query: 'commit pdf ripgrep', limit: 1 } }),
+    );
+    expect(names(text)).toHaveLength(1);
+  });
+
+  it('refuses a `skill` it does not serve, and a `skill` with no query', async () => {
+    await expect(client.callTool({ name: 'search_skills', arguments: { skill: 'nope', query: 'x' } })).rejects.toThrow(
+      /Unknown skill "nope"/,
+    );
+    await expect(client.callTool({ name: 'search_skills', arguments: { skill: 'pdf-forms' } })).rejects.toThrow(
+      /needs a `query`/,
+    );
   });
 
   it('filters by tag, case-insensitively, independent of the query', async () => {
     const byTag = firstText(await client.callTool({ name: 'search_skills', arguments: { tags: ['GIT'] } }));
     expect(names(byTag)).toEqual(['commit.messages']);
+  });
+
+  it('names the supporting file and heading a hit matched in, and searches inside one skill', async () => {
+    const files: Record<string, string> = {
+      'reference.md': '# Overview\n\nGeneral notes.\n\n## Checkboxes\n\nTick a checkbox field with `fill.py --check`.',
+    };
+    const withFiles = await connect(() => SKILLS, {
+      readSupportingFile: async (_name, relPath) => {
+        const content = files[relPath];
+        if (content === undefined) {
+          throw new Error('missing');
+        }
+        return { path: relPath, content, encoding: 'utf8', size: content.length, binary: false };
+      },
+    });
+    const hits = firstText(await withFiles.callTool({ name: 'search_skills', arguments: { query: 'checkbox' } }));
+    expect(hits).toContain('pdf-forms (');
+    expect(hits).toContain('  ↳ reference.md § Checkboxes');
+
+    const inside = firstText(
+      await withFiles.callTool({ name: 'search_skills', arguments: { skill: 'pdf-forms', query: 'checkbox' } }),
+    );
+    expect(inside).toContain('passages in pdf-forms: 1');
+    expect(inside).toContain('- reference.md § Checkboxes: Tick a checkbox field');
   });
 
   it('returns the whole catalogue when given no query or tags (mirrors list_skills)', async () => {

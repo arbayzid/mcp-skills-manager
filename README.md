@@ -19,8 +19,13 @@ Every skill is exposed two ways at once:
 Every endpoint also serves two meta-tools for **discovery**: `list_skills`
 returns a text catalogue of the available skills, one line each — name, tags,
 supporting files, last change and description — with no bodies, and
-`search_skills` filters that catalogue by a free-text query and/or tags, so an
-agent can find what's relevant by intent before loading anything.
+`search_skills` ranks that catalogue against a free-text query (BM25, via
+MiniSearch, over each skill's metadata, body and text supporting files) and/or
+filters it by tags, so an agent can find what's relevant by intent before
+loading anything. Each hit is followed by `↳ path § heading` lines naming the
+sections that matched, and `search_skills({ skill, query })` searches inside one
+skill and returns its matching sections with a snippet each — so an agent can go
+straight to the right reference file.
 
 Skills are advertised as tools in one of two modes (a global default, optionally
 overridden per workspace): **per-skill** (the default — one no-arg tool per skill)
@@ -51,8 +56,9 @@ clients.
 - 🌿 **Git-linked skills** — point a skill at a folder in a git repo and pull
   the newest version with **Sync now**
 - 🧩 **Workspaces** — group skills into filtered endpoints
-- 🔍 **Discovery meta-tools** — `list_skills` and `search_skills` on every
-  endpoint, plus `tags` on skills for organising and filtering
+- 🔍 **Discovery meta-tools** — `list_skills` and ranked `search_skills` (down to
+  the section of a supporting file) on every endpoint, plus `tags` on skills for
+  organising and filtering
 - 🤖 **MCP authoring** — agents can create and refine their own skills over MCP
 - ⌨️ **Skill prompts** — a skill's `prompts/*.md` files are served as MCP
   prompts, so a client can start the skill from a slash command
